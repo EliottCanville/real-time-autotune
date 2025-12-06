@@ -1,0 +1,85 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Compiled Object files
+*.o
+*.obj
+*.ko
+*.elf
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+a.out
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.so
+*.so.*
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+
+# Build directories
+build/
+dist/
+*.egg-info/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Audio output files
+dump_out
+dump_out.wav
+*.bin
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Autotools
+autom4te.cache/
+config.log
+config.status
+.deps/
+.libs/
+*.lo
+*.la
+libtool
+
+# RtAudio build artifacts (if built locally)
+rtaudio-*/build/
+rtaudio-*/Makefile
+rtaudio-*/config.h
+rtaudio-*/rtaudio-config
+rtaudio-*/.libs/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
