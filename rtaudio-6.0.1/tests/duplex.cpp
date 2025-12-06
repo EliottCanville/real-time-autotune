@@ -74,6 +74,7 @@ typedef struct mystruct {
 
   // Question 12: f0 buffer
   MY_TYPE *dumpBufferF0;
+  int dumpBufferF0Size;
   int dumpIndexF0;
 
   // Sampling rate for f0 calculation
@@ -164,7 +165,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
   MY_TYPE f0 = (MY_TYPE)mydata->fs / period;
 
   // Write f0 to dump buffer
-  write_buff_dump(&f0, 1, mydata->dumpBufferF0, mydata->dumpBufferSize, &mydata->dumpIndexF0);
+  write_buff_dump(&f0, 1, mydata->dumpBufferF0, mydata->dumpBufferF0Size, &mydata->dumpIndexF0);
 
   delete[] autocorr;
 
@@ -197,7 +198,7 @@ int main( int argc, char *argv[] )
 
   adac.showWarnings( true );
 
-  unsigned int bufferFrames = 512;
+  unsigned int bufferFrames = 128;
   RtAudio::StreamParameters iParams, oParams;
   iParams.nChannels = channels;
   iParams.firstChannel = iOffset;
@@ -228,7 +229,7 @@ int main( int argc, char *argv[] )
   mydata->fs = fs;
 
   // Question 4: Loading audio file in main()
-  const char* audioFile = "../audio_files/Tone_220Hz.bin";
+  const char* audioFile = "../../audio_files/F01_a3_s100_v04.bin";
   FILE *file = fopen(audioFile, "rb");
   if (!file) {
     std::cerr << "Could not open file: " << audioFile << std::endl;
@@ -243,10 +244,14 @@ int main( int argc, char *argv[] )
   fclose(file);
 
   // Question 7: Initialize dump buffers in main()
-  mydata->dumpBufferSize = fs * 10;  // 10 seconds
+  mydata->dumpBufferSize = fs * 6;  // 6 seconds of audio samples
   mydata->dumpBufferInput = new MY_TYPE[mydata->dumpBufferSize];
   mydata->dumpBufferOutput = new MY_TYPE[mydata->dumpBufferSize];
-  mydata->dumpBufferF0 = new MY_TYPE[mydata->dumpBufferSize];
+
+  // f0 buffer: one value per callback, so size = duration * fs / bufferFrames
+  mydata->dumpBufferF0Size = 6 * fs / bufferFrames;
+  mydata->dumpBufferF0 = new MY_TYPE[mydata->dumpBufferF0Size];
+
   mydata->dumpIndexInput = 0;
   mydata->dumpIndexOutput = 0;
   mydata->dumpIndexF0 = 0;
