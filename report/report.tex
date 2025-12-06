@@ -156,10 +156,69 @@ At N=512 (Figure \ref{fig:f0_512}), the trajectory stabilizes with reduced jitte
 
 A circular buffer decouples analysis from I/O buffer sizes, enabling large analysis windows (e.g., 1024 samples) with small I/O buffers (e.g., 256 samples) for both low latency and accurate estimation. It creates a sliding window by automatically overwriting old samples, avoiding explicit data shifting. Overlapping window analysis produces smoother $f_0$ trajectories with better temporal tracking. Fixed memory allocation and pointer arithmetic ensure efficient real-time processing.
 
+\section{Harmonic Analysis and Additive Synthesis}
+
+\subsection{Question 15: DFT Bin Calculation}
+
+\textbf{What is the value of the DFT bin closest to the measured $f_0$?}
+
+For a DFT of size $n_{fft}$, the frequency resolution is $\Delta f = f_s / n_{fft}$. The bin index $k$ corresponding to a frequency $f$ is:
+
+\begin{equation}
+k = \text{round}\left(\frac{f}{\Delta f}\right) = \text{round}\left(\frac{f \cdot n_{fft}}{f_s}\right)
+\end{equation}
+
+For $f_0 \approx 200$ Hz with $f_s = 44100$ Hz and $n_{fft} = 2048$ (next power of 2 from buffer size), the bin is $k_0 = \text{round}(200 \times 2048 / 44100) \approx 9$.
+
+\subsection{Question 16: Harmonic Extraction}
+
+\textbf{Calculate the DFT and extract frequency and amplitude values for each harmonic.}
+
+The FFT is calculated on the input buffer (zero-padded to $n_{fft}$). For each harmonic $h = 1, 2, \ldots$, the bin index is $k_h = h \cdot k_0$. The complex DFT value at bin $k_h$ is $X[k_h] = R[k_h] + jI[k_h]$.
+
+The amplitude is obtained from the magnitude, normalized by $n_{fft}$:
+\begin{equation}
+A_h = \frac{2}{n_{fft}} \sqrt{R[k_h]^2 + I[k_h]^2}
+\end{equation}
+
+The factor 2 accounts for the fact that a real signal's DFT has symmetric positive and negative frequencies. The phase is $\phi_h = \text{atan2}(I[k_h], R[k_h])$.
+
+\subsection{Question 17: Additive Synthesis Without Phase Continuity}
+
+\textbf{Implement synthesis and explain the clicks heard.}
+
+Additive synthesis reconstructs the signal by summing cosines at harmonic frequencies with extracted amplitudes:
+\begin{equation}
+y[n] = \sum_{h} A_h \cos\left(2\pi f_h \frac{n}{f_s}\right)
+\end{equation}
+
+When each frame is synthesized independently (resetting $n=0$ at each callback), the phase is discontinuous at frame boundaries. If the signal value at the end of frame $k$ differs from the value at the start of frame $k+1$, an abrupt jump occurs, producing audible clicks. These discontinuities introduce high-frequency artifacts.
+
+\subsection{Question 18: Adding Phase for Continuity}
+
+\textbf{Include phase in synthesis. Are transitions between frames perfect?}
+
+Phase continuity is achieved by maintaining a global sample counter and using the FFT phase:
+\begin{equation}
+y[n] = \sum_{h} A_h \cos\left(2\pi f_h \frac{n_{global}}{f_s} + \phi_h\right)
+\end{equation}
+
+where $n_{global}$ is the total sample count since program start, and $\phi_h$ is the phase from the FFT. This ensures the synthesized waveform continues smoothly from one frame to the next.
+
+Transitions are improved but not perfect. Imperfections arise from:
+\begin{itemize}
+\item $f_0$ variations between frames causing frequency jumps
+\item Amplitude changes between consecutive frames
+\item FFT phase estimation errors
+\item Frame-to-frame harmonic content variations
+\end{itemize}
+
+For sustained vowels with stable $f_0$, transitions are nearly seamless. During transients or pitch changes, some artifacts may remain.
+
 \section{Conclusion}
 
-This project implements a real-time autotune effect using additive synthesis. Key challenges addressed include separating non-real-time operations (file I/O, memory allocation) from the audio callback, implementing $f_0$ estimation via autocorrelation, balancing buffer size trade-offs between latency and accuracy, and using circular buffers for efficient sliding window analysis.
+This project implements a real-time autotune effect using additive synthesis. Key challenges addressed include separating non-real-time operations (file I/O, memory allocation) from the audio callback, implementing $f_0$ estimation via autocorrelation, balancing buffer size trade-offs between latency and accuracy, performing FFT-based harmonic analysis, and synthesizing audio with phase continuity to avoid frame boundary artifacts.
 
-The final implementation processes audio in real-time, detecting pitch and applying autotune correction to quantize frequencies to the musical scale, demonstrating the critical importance of distinguishing real-time from non-real-time operations to meet strict timing deadlines.
+The final implementation processes audio in real-time, detecting pitch, extracting harmonics, and reconstructing the signal through additive synthesis, demonstrating the critical importance of distinguishing real-time from non-real-time operations and maintaining phase coherence across frames.
 
 \end{document}

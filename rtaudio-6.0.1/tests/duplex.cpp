@@ -56,6 +56,214 @@ int find_second_max(MY_TYPE* autocorr, int N, int min_lag, int max_lag) {
   return second_max_index;
 }
 
+// ---- FFT-related functions (from somefunc_2025.cpp) ----
+MY_TYPE *_sintbl = 0;
+int maxfftsize = 0;
+
+char *getmem(int leng, unsigned size) {
+  char *p = NULL;
+  if ((p = (char *)calloc(leng, size)) == NULL){
+    fprintf(stderr, "Memory allocation error !\n");
+    exit(3);
+  }
+  return (p);
+}
+
+MY_TYPE *dgetmem(int leng) {
+  return ((MY_TYPE *)getmem(leng, sizeof(MY_TYPE)));
+}
+
+int get_nextpow2(int n) {
+  int k = 1;
+  while (k < n){
+    k *= 2;
+  }
+  return k;
+}
+
+static int checkm(const int m) {
+  int k;
+  for (k = 4; k <= m; k <<= 1) {
+    if (k == m)
+      return (0);
+  }
+  fprintf(stderr, "fft : m must be a integer of power of 2! (m=%i)\n",m);
+  return (-1);
+}
+
+int fft(MY_TYPE *x, MY_TYPE *y, const int m) {
+  int j, lmx, li;
+  MY_TYPE *xp, *yp;
+  MY_TYPE *sinp, *cosp;
+  int lf, lix, tblsize;
+  int mv2, mm1;
+  MY_TYPE t1, t2;
+  MY_TYPE arg;
+
+  if (checkm(m))
+    return (-1);
+
+  if ((_sintbl == 0) || (maxfftsize < m)) {
+    tblsize = m - m / 4 + 1;
+    arg = PI / m * 2;
+    if (_sintbl != 0)
+      free(_sintbl);
+    _sintbl = sinp = dgetmem(tblsize);
+    *sinp++ = 0;
+    for (j = 1; j < tblsize; j++)
+      *sinp++ = sin(arg * (MY_TYPE) j);
+    _sintbl[m / 2] = 0;
+    maxfftsize = m;
+  }
+
+  lf = maxfftsize / m;
+  lmx = m;
+
+  for (;;) {
+    lix = lmx;
+    lmx /= 2;
+    if (lmx <= 1)
+      break;
+    sinp = _sintbl;
+    cosp = _sintbl + maxfftsize / 4;
+    for (j = 0; j < lmx; j++) {
+      xp = &x[j];
+      yp = &y[j];
+      for (li = lix; li <= m; li += lix) {
+        t1 = *(xp) - *(xp + lmx);
+        t2 = *(yp) - *(yp + lmx);
+        *(xp) += *(xp + lmx);
+        *(yp) += *(yp + lmx);
+        *(xp + lmx) = *cosp * t1 + *sinp * t2;
+        *(yp + lmx) = *cosp * t2 - *sinp * t1;
+        xp += lix;
+        yp += lix;
+      }
+      sinp += lf;
+      cosp += lf;
+    }
+    lf += lf;
+  }
+
+  xp = x;
+  yp = y;
+  for (li = m / 2; li--; xp += 2, yp += 2) {
+    t1 = *(xp) - *(xp + 1);
+    t2 = *(yp) - *(yp + 1);
+    *(xp) += *(xp + 1);
+    *(yp) += *(yp + 1);
+    *(xp + 1) = t1;
+    *(yp + 1) = t2;
+  }
+
+  j = 0;
+  xp = x;
+  yp = y;
+  mv2 = m / 2;
+  mm1 = m - 1;
+  for (lmx = 0; lmx < mm1; lmx++) {
+    if ((li = lmx - j) < 0) {
+      t1 = *(xp);
+      t2 = *(yp);
+      *(xp) = *(xp + li);
+      *(yp) = *(yp + li);
+      *(xp + li) = t1;
+      *(yp + li) = t2;
+    }
+    li = mv2;
+    while (li <= j) {
+      j -= li;
+      li /= 2;
+    }
+    j += li;
+    xp = x + j;
+    yp = y + j;
+  }
+
+  return (0);
+}
+
+int fftr(MY_TYPE *x, MY_TYPE *y, const int m) {
+  int i, j;
+  MY_TYPE *xp, *yp, *xq;
+  MY_TYPE *yq;
+  int mv2, n, tblsize;
+  MY_TYPE xt, yt, *sinp, *cosp;
+  MY_TYPE arg;
+
+  mv2 = m / 2;
+
+  xq = xp = x;
+  yp = y;
+  for (i = mv2; --i >= 0;) {
+    *xp++ = *xq++;
+    *yp++ = *xq++;
+  }
+
+  if (fft(x, y, mv2) == -1)
+    return (-1);
+
+  if ((_sintbl == 0) || (maxfftsize < m)) {
+    tblsize = m - m / 4 + 1;
+    arg = PI / m * 2;
+    if (_sintbl != 0)
+      free(_sintbl);
+    _sintbl = sinp = dgetmem(tblsize);
+    *sinp++ = 0;
+    for (j = 1; j < tblsize; j++)
+      *sinp++ = sin(arg * (MY_TYPE) j);
+    _sintbl[m / 2] = 0;
+    maxfftsize = m;
+  }
+
+  n = maxfftsize / m;
+  sinp = _sintbl;
+  cosp = _sintbl + maxfftsize / 4;
+
+  xp = x;
+  yp = y;
+  xq = xp + m;
+  yq = yp + m;
+  *(xp + mv2) = *xp - *yp;
+  *xp = *xp + *yp;
+  *(yp + mv2) = *yp = 0;
+
+  for (i = mv2, j = mv2 - 2; --i; j -= 2) {
+    ++xp;
+    ++yp;
+    sinp += n;
+    cosp += n;
+    yt = *yp + *(yp + j);
+    xt = *xp - *(xp + j);
+    *(--xq) = (*xp + *(xp + j) + *cosp * yt - *sinp * xt) * 0.5;
+    *(--yq) = (*(yp + j) - *yp + *sinp * yt + *cosp * xt) * 0.5;
+  }
+
+  xp = x + 1;
+  yp = y + 1;
+  xq = x + m;
+  yq = y + m;
+
+  for (i = mv2; --i;) {
+    *xp++ = *(--xq);
+    *yp++ = -(*(--yq));
+  }
+
+  return (0);
+}
+
+static MY_TYPE *hanning(MY_TYPE *w, const int leng) {
+  int i;
+  MY_TYPE arg;
+  MY_TYPE *p;
+
+  arg = 2*PI / (leng - 1);
+  for (p = w, i = 0; i < leng; i++)
+    *p++ = 0.5 * (1 - cos(i * arg));
+
+  return (w);
+}
+
 typedef struct mystruct {
   MY_TYPE gain;
   MY_TYPE add;
@@ -79,6 +287,12 @@ typedef struct mystruct {
 
   // Sampling rate for f0 calculation
   unsigned int fs;
+
+  // Question 15-18: FFT and harmonic analysis
+  int n_fft;              // FFT size
+  int max_harmonics;      // Maximum number of harmonics to track
+  MY_TYPE *phases;        // Phase accumulator for each harmonic (for Q18)
+  long sampleCounter;     // Sample counter for phase continuity
 }* mystruct_t;
 
 void usage( void ) {
@@ -141,16 +355,8 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
     memcpy(in + framesLeft, mydata->fileBuffer, (nBufferFrames - framesLeft) * sizeof(MY_TYPE));
   }
 
-  // Question 3b: Element-by-element copy (instead of memcpy)
-  for (unsigned int i = 0; i < nBufferFrames; i++) {
-    out[i] = in[i];
-  }
-
   // Question 8: Write input buffer to dump buffer
   write_buff_dump(in, nBufferFrames, mydata->dumpBufferInput, mydata->dumpBufferSize, &mydata->dumpIndexInput);
-
-  // Question 11: Write output buffer to dump buffer
-  write_buff_dump(out, nBufferFrames, mydata->dumpBufferOutput, mydata->dumpBufferSize, &mydata->dumpIndexOutput);
 
   // Question 12: Autocorrelation and f0 estimation
   MY_TYPE* autocorr = new MY_TYPE[nBufferFrames];
@@ -168,6 +374,105 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
   write_buff_dump(&f0, 1, mydata->dumpBufferF0, mydata->dumpBufferF0Size, &mydata->dumpIndexF0);
 
   delete[] autocorr;
+
+  // Question 15-16: FFT and harmonic analysis
+  int n_fft = mydata->n_fft;
+
+  // Allocate FFT buffers (real and imaginary parts)
+  MY_TYPE* fft_real = new MY_TYPE[n_fft];
+  MY_TYPE* fft_imag = new MY_TYPE[n_fft];
+
+  // Copy input to FFT buffer and zero-pad if necessary
+  for (unsigned int i = 0; i < nBufferFrames && i < (unsigned int)n_fft; i++) {
+    fft_real[i] = in[i];
+    fft_imag[i] = 0.0;
+  }
+  for (int i = nBufferFrames; i < n_fft; i++) {
+    fft_real[i] = 0.0;
+    fft_imag[i] = 0.0;
+  }
+
+  // Calculate FFT
+  fftr(fft_real, fft_imag, n_fft);
+
+  // Question 15: Calculate DFT bin closest to f0
+  MY_TYPE freq_resolution = (MY_TYPE)mydata->fs / n_fft;
+  int f0_bin = (int)(f0 / freq_resolution + 0.5);  // Round to nearest bin
+
+  // Question 16: Extract harmonics
+  // Calculate magnitude and normalize (FFT output is scaled by n_fft for a cosine)
+  int num_harmonics = 0;
+  MY_TYPE* harmonic_freqs = new MY_TYPE[mydata->max_harmonics];
+  MY_TYPE* harmonic_amps = new MY_TYPE[mydata->max_harmonics];
+  MY_TYPE* harmonic_phases = new MY_TYPE[mydata->max_harmonics];
+
+  for (int h = 1; h <= mydata->max_harmonics; h++) {
+    int harmonic_bin = f0_bin * h;
+    if (harmonic_bin < n_fft / 2) {
+      harmonic_freqs[num_harmonics] = h * f0;
+
+      // Calculate magnitude from real and imaginary parts
+      MY_TYPE real_part = fft_real[harmonic_bin];
+      MY_TYPE imag_part = fft_imag[harmonic_bin];
+      MY_TYPE magnitude = sqrt(real_part * real_part + imag_part * imag_part);
+
+      // Normalize: FFT gives DFT * n_fft for a real signal peak
+      harmonic_amps[num_harmonics] = magnitude * 2.0 / n_fft;
+
+      // Calculate phase
+      harmonic_phases[num_harmonics] = atan2(imag_part, real_part);
+
+      num_harmonics++;
+    } else {
+      break;
+    }
+  }
+
+  // Question 17-18: Additive synthesis
+  // Initialize output buffer to zero
+  for (unsigned int i = 0; i < nBufferFrames; i++) {
+    out[i] = 0.0;
+  }
+
+  // Synthesize each harmonic
+  for (int h = 0; h < num_harmonics; h++) {
+    MY_TYPE freq = harmonic_freqs[h];
+    MY_TYPE amp = harmonic_amps[h];
+    MY_TYPE phase = harmonic_phases[h];
+
+    for (unsigned int i = 0; i < nBufferFrames; i++) {
+      // Question 17: Simple synthesis (causes clicks due to phase discontinuity)
+      // out[i] += amp * cos(2.0 * PI * freq * i / mydata->fs);
+
+      // Question 18: Include phase for continuity between frames
+      // Using sampleCounter to maintain global time reference
+      // Phase = 2*pi*f*t + initial_phase (from FFT)
+      // t = (sampleCounter + i) / fs
+      MY_TYPE t = (MY_TYPE)(mydata->sampleCounter + i) / mydata->fs;
+      MY_TYPE instantaneous_phase = 2.0 * PI * freq * t + phase;
+
+      out[i] += amp * cos(instantaneous_phase);
+    }
+  }
+
+  // Clamp output to prevent clipping
+  for (unsigned int i = 0; i < nBufferFrames; i++) {
+    if (out[i] > 1.0) out[i] = 1.0;
+    if (out[i] < -1.0) out[i] = -1.0;
+  }
+
+  // Update sample counter for phase continuity
+  mydata->sampleCounter += nBufferFrames;
+
+  // Clean up
+  delete[] fft_real;
+  delete[] fft_imag;
+  delete[] harmonic_freqs;
+  delete[] harmonic_amps;
+  delete[] harmonic_phases;
+
+  // Question 11: Write output buffer to dump buffer
+  write_buff_dump(out, nBufferFrames, mydata->dumpBufferOutput, mydata->dumpBufferSize, &mydata->dumpIndexOutput);
 
   return 0;
 }
@@ -227,6 +532,15 @@ int main( int argc, char *argv[] )
   mydata->gain = 0.5;
   mydata->add = 0.1;
   mydata->fs = fs;
+
+  // Question 15-18: Initialize FFT and synthesis parameters
+  mydata->n_fft = get_nextpow2(bufferFrames);  // Next power of 2 >= bufferFrames
+  mydata->max_harmonics = 50;  // Track up to 50 harmonics
+  mydata->phases = new MY_TYPE[mydata->max_harmonics];
+  for (int i = 0; i < mydata->max_harmonics; i++) {
+    mydata->phases[i] = 0.0;
+  }
+  mydata->sampleCounter = 0;
 
   // Question 4: Loading audio file in main()
   const char* audioFile = "../../audio_files/F01_a3_s100_v04.bin";
@@ -302,6 +616,7 @@ int main( int argc, char *argv[] )
   delete[] mydata->dumpBufferInput;
   delete[] mydata->dumpBufferOutput;
   delete[] mydata->dumpBufferF0;
+  delete[] mydata->phases;
   delete mydata;
 
   return 0;
