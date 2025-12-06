@@ -79,56 +79,83 @@ f_0 = \frac{f_s}{\tau}
 
 where $f_s$ is the sampling rate (44100 Hz) and $\tau$ is the lag corresponding to the second maximum of the autocorrelation.
 
-% Placeholder for f0 plots
 \begin{figure}[h]
     \centering
-    % \includegraphics[width=0.8\textwidth]{../files/q12_f0_plot.pdf}
-    \caption{Fundamental frequency $f_0$ estimation over time for test audio file. \textit{(Plot to be added)}}
-    \label{fig:f0_estimation}
+    \includegraphics[width=0.8\textwidth]{F01_a3_s100_v04.png}
+    \caption{Input signal F01\_a3\_s100\_v04 (female voice)}
+    \label{fig:input_signal}
 \end{figure}
 
-\textbf{Corresponding input files:}
-\begin{itemize}
-    \item \texttt{q12\_input\_F01\_a3\_s100\_v04.wav}
-    \item \texttt{q12\_input\_M07\_a1\_s100\_v03.wav}
-    \item \texttt{q12\_input\_Tone\_220Hz.wav}
-\end{itemize}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{f0-without_frequency_range-512.png}
+    \caption{$f_0$ estimation without frequency range limitation (buffer size 512)}
+    \label{fig:f0_no_limit}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{f0-512.png}
+    \caption{$f_0$ estimation with frequency range limitation 80-450 Hz (buffer size 512)}
+    \label{fig:f0_limited}
+\end{figure}
 
 \textbf{Analysis and comments:}
 
-For the pure tone (220 Hz), estimated $f_0$ closely matches the expected value with minor variations due to buffer size and quantization, confirming correct algorithm behavior for periodic signals.
+The input signal F01\_a3\_s100\_v04 (Figure \ref{fig:input_signal}) is a sustained vowel from a female speaker with clear periodic structure during voiced segments and lower amplitude during silent periods.
 
-For speech signals (F01, M07), $f_0$ shows natural fluctuations from prosody and intonation. Voiced segments exhibit stable values following the pitch contour, while unvoiced segments produce erratic estimates as autocorrelation assumes periodicity. Errors include octave detection ($2f_0$ or $f_0/2$), noise in unvoiced segments, and buffer boundary effects with incomplete pitch periods.
+Without frequency range limitation (Figure \ref{fig:f0_no_limit}), the autocorrelation method produces highly erratic $f_0$ estimates with values exceeding 1000 Hz and frequent jumps. This demonstrates the critical importance of constraining the search range. Unvoiced segments and low-amplitude regions trigger false detections at arbitrary lags, producing unrealistic frequency values.
 
-Buffer size creates a trade-off between time and frequency resolution: smaller buffers offer better temporal tracking but lower precision, while larger buffers provide accurate estimation but slower response to pitch changes.
+With frequency range limitation to 80-450 Hz (Figure \ref{fig:f0_limited}), the $f_0$ estimation is dramatically improved. The trajectory shows a stable fundamental frequency around 200-250 Hz during voiced segments, consistent with typical female vocal range. The temporal evolution reveals natural pitch variations corresponding to prosodic patterns. However, some octave errors ($f_0/2$) are still visible as occasional drops to approximately 100-125 Hz, particularly during segment transitions or low-energy frames. These errors occur when the autocorrelation's second maximum corresponds to twice the actual period rather than the fundamental period.
 
 \subsection{Question 14: Buffer Size Analysis and Circular Buffer}
 
 \textbf{Provide the corresponding plots and comment. Why would a circular buffer be useful here?}
 
-% Placeholder for buffer size comparison plots
 \begin{figure}[h]
     \centering
-    % \includegraphics[width=0.8\textwidth]{../files/q14_f0_buffersize_comparison.pdf}
-    \caption{$f_0$ estimation for different buffer sizes. \textit{(Plot to be added)}}
-    \label{fig:buffer_comparison}
+    \includegraphics[width=0.7\textwidth]{f0-128.png}
+    \caption{$f_0$ estimation with buffer size N=128}
+    \label{fig:f0_128}
 \end{figure}
 
-\textbf{Corresponding input files:}
-\begin{itemize}
-    \item \texttt{q14\_input\_bufferN128.wav}
-    \item \texttt{q14\_input\_bufferN256.wav}
-    \item \texttt{q14\_input\_bufferN512.wav}
-    \item \texttt{q14\_f0\_bufferN128.bin}
-    \item \texttt{q14\_f0\_bufferN256.bin}
-    \item \texttt{q14\_f0\_bufferN512.bin}
-\end{itemize}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{f0-256.png}
+    \caption{$f_0$ estimation with buffer size N=256}
+    \label{fig:f0_256}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{f0-512.png}
+    \caption{$f_0$ estimation with buffer size N=512}
+    \label{fig:f0_512}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{f0-1024.png}
+    \caption{$f_0$ estimation with buffer size N=1024}
+    \label{fig:f0_1024}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{f0-2048.png}
+    \caption{$f_0$ estimation with buffer size N=2048}
+    \label{fig:f0_2048}
+\end{figure}
 
 \textbf{Analysis of buffer size effects:}
 
-Small buffers (128-256 samples) provide faster response to pitch changes but suffer from lower frequency resolution, making them susceptible to noise and octave errors. Short windows may miss complete pitch periods for low frequencies.
+The comparison of buffer sizes from 128 to 2048 samples reveals clear trade-offs. With N=128 (Figure \ref{fig:f0_128}), the $f_0$ trajectory is extremely noisy with frequent octave errors and spurious values, as the short analysis window cannot reliably capture complete pitch periods for the ~200 Hz fundamental (requiring ~220 samples at 44100 Hz). The estimation is unstable throughout.
 
-Large buffers (512-1024 samples) offer better frequency resolution and smoother $f_0$ trajectories with fewer errors, but respond slower to rapid changes and introduce higher latency, problematic for interactive applications.
+At N=256 (Figure \ref{fig:f0_256}), performance improves slightly but remains highly erratic with persistent octave jumps and detection failures. At N=512 (Figure \ref{fig:f0_512}), the trajectory becomes more stable with reduced jitter, though octave errors still occur occasionally during transitions.
+
+With N=1024 (Figure \ref{fig:f0_1024}), the estimation quality significantly improves. The $f_0$ curve is smoother with fewer octave errors and more consistent tracking during voiced segments. The longer analysis window provides better frequency resolution, reducing ambiguity in peak detection.
+
+At N=2048 (Figure \ref{fig:f0_2048}), the trajectory is the smoothest and most stable, with minimal noise and very few octave errors. However, the temporal resolution is reduced, with fewer $f_0$ estimates per second (approximately 21 Hz update rate at 44100 Hz sampling), making it slower to respond to rapid pitch changes. The increased latency (~46 ms) would be problematic for interactive real-time applications.
 
 \textbf{Why a circular buffer is useful:}
 
