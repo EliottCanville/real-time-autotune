@@ -198,7 +198,7 @@ int main( int argc, char *argv[] )
 
   adac.showWarnings( true );
 
-  unsigned int bufferFrames = 128;
+  unsigned int bufferFrames = 2048;
   RtAudio::StreamParameters iParams, oParams;
   iParams.nChannels = channels;
   iParams.firstChannel = iOffset;

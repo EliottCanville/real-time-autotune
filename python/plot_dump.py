@@ -41,13 +41,13 @@ plt.figure(figsize=(12, 6))
 if 'f0' in filename:
     # Convert sample index to time (each f0 value per buffer)
     # Assuming buffer size of 512 samples
-    buffer_size = 512
+    buffer_size = 2048
     time = np.arange(len(x)) * buffer_size / fs
     plt.plot(time, x)
     plt.xlabel('Time (s)')
     plt.ylabel('Fundamental Frequency f0 (Hz)')
     plt.title('f0 estimation over time')
-    plt.ylim([0, 500])  # Typical vocal range
+    plt.ylim([80, 500])  # Typical vocal range
 else:
     # For audio signals, plot vs sample index or time
     time = np.arange(len(x)) / fs
