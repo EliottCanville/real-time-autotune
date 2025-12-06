@@ -1,0 +1,258 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\geometry{margin=2.5cm}
+
+\title{Real-Time Signal Processing \\
+\large Autotune Project Report}
+\author{Your Names Here}
+\date{January 2025}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This report presents the implementation and analysis of a real-time autotune audio effect using additive synthesis. The project was developed in C/C++ using the RtAudio API for real-time audio processing.
+
+\section{Getting Started with RtAudio API}
+
+\subsection{Question 2: Functionality of audioprobe and duplex}
+
+\textbf{What do these two programs do?}
+
+\texttt{audioprobe} is a diagnostic tool that probes the system's audio devices. It scans and displays information about all available audio input and output devices on the system, including their capabilities such as:
+\begin{itemize}
+    \item Number of input/output channels
+    \item Supported sampling rates
+    \item Native audio formats
+    \item Device names and IDs
+\end{itemize}
+
+\texttt{duplex} is a basic audio I/O stream demonstration program that implements a simple pass-through system. It captures audio from an input device (e.g., microphone) and simultaneously plays it back through an output device (e.g., speakers/headphones) in real-time. This program serves as a foundation for building more complex real-time audio processing applications.
+
+\subsection{Question 3a: Roles of openStream() and inout()}
+
+\textbf{What are the roles of these two functions? Identify the arguments of openStream() and inout() for exchanging data between main and audio callback.}
+
+\textbf{Role of openStream():}
+The \texttt{openStream()} function is responsible for configuring and initializing the audio stream. It sets up the audio I/O parameters including:
+\begin{itemize}
+    \item Output and input device parameters (number of channels, device ID)
+    \item Audio format (e.g., RTAUDIO\_FLOAT64 for double precision)
+    \item Sampling rate (typically 44100 Hz)
+    \item Buffer size (number of frames per callback)
+    \item Callback function pointer (inout)
+    \item User data to be passed to the callback
+\end{itemize}
+
+\textbf{Role of inout():}
+The \texttt{inout()} function is the audio callback function that is called automatically by the RtAudio API at regular intervals. It processes audio data in real-time by:
+\begin{itemize}
+    \item Reading input audio samples from the input buffer
+    \item Performing signal processing operations
+    \item Writing processed samples to the output buffer
+\end{itemize}
+
+\textbf{Arguments for data exchange:}
+The key arguments that enable data exchange between \texttt{main()} and the \texttt{inout()} callback are:
+\begin{itemize}
+    \item \texttt{void *outputBuffer}: Pointer to the output audio buffer (data sent to speakers)
+    \item \texttt{void *inputBuffer}: Pointer to the input audio buffer (data from microphone)
+    \item \texttt{void *userData}: Pointer to user-defined data structure passed from main(), allowing the callback to access variables initialized in main() (e.g., buffer sizes, pre-loaded audio files, dump buffers, etc.)
+\end{itemize}
+
+These void pointers must be cast to their actual types within the callback function to access the data.
+
+\section{Debugging Toolbox}
+
+\subsection{Question 4: Loading Audio Files}
+
+\textbf{Where do you place the loading of the audio file in the program, and why?}
+
+The audio file loading is placed in the \texttt{main()} function, before the audio stream is started. This is the correct approach for several reasons:
+
+\begin{itemize}
+    \item \textbf{Real-time constraints:} File I/O operations (fopen, fread) are blocking operations that can take an unpredictable amount of time. If performed in the \texttt{inout()} callback, they would cause buffer underruns and audio dropouts, violating real-time requirements.
+
+    \item \textbf{One-time operation:} The audio file only needs to be loaded once at program initialization, not repeatedly during each callback execution.
+
+    \item \textbf{Memory allocation:} The memory allocation for storing the file data should be done before real-time processing begins to avoid dynamic allocation in the callback.
+
+    \item \textbf{Data availability:} By loading in main() and passing a pointer through userData, the entire audio file is available to all callback invocations.
+\end{itemize}
+
+The loaded audio data is then accessed sequentially in the \texttt{inout()} callback to simulate real-time input.
+
+\subsection{Question 7: Buffer Initialization}
+
+\textbf{Do you initialize it in main() or inout() and why?}
+
+The \texttt{buffer\_dump} array is initialized in \texttt{main()}, before starting the audio stream. This is essential because:
+
+\begin{itemize}
+    \item \textbf{Memory allocation:} Dynamic memory allocation (malloc/calloc) should never be performed in a real-time callback function. Memory allocation operations are non-deterministic and can cause significant delays, leading to buffer underruns.
+
+    \item \textbf{Persistent storage:} The dump buffer needs to persist across all callback invocations to accumulate data throughout the program execution. If initialized in \texttt{inout()}, it would be recreated on each call, losing previous data.
+
+    \item \textbf{Single initialization:} The buffer only needs to be allocated once, and this should happen before real-time processing begins.
+
+    \item \textbf{Memory management:} Initializing in main() allows for proper cleanup (free) when the program terminates.
+\end{itemize}
+
+A pointer to the dump buffer is passed via the userData structure, allowing the callback to write data to it incrementally.
+
+\subsection{Question 9: Writing to Disk}
+
+\textbf{Do you write it in main() or inout() and why?}
+
+The \texttt{buffer\_dump} is written to disk in \texttt{main()}, after the audio stream has been stopped. This is critical because:
+
+\begin{itemize}
+    \item \textbf{Real-time constraints:} File writing operations (fopen, fwrite, fclose) are blocking I/O operations that can take significant time. Performing these in the \texttt{inout()} callback would cause severe buffer underruns and audio glitches.
+
+    \item \textbf{Data completeness:} Writing in main() ensures that all accumulated data from the entire execution is written at once, rather than partial writes during processing.
+
+    \item \textbf{Non-real-time operation:} File I/O is inherently non-deterministic and incompatible with real-time processing requirements where the callback must complete within a strict time deadline.
+
+    \item \textbf{Program flow:} Writing after stream termination ensures clean program shutdown and complete data capture.
+\end{itemize}
+
+During callback execution, data is only copied to the dump buffer using \texttt{write\_buff\_dump()}, which is a fast, deterministic operation. The actual disk write happens once at the end.
+
+\section{Signal Analysis}
+
+\subsection{Question 12: Fundamental Frequency Estimation}
+
+\textbf{Include in your report your plots of $f_0$ as well as the files containing the corresponding input signals. Comment on your results.}
+
+The fundamental frequency $f_0$ was estimated using the autocorrelation method. For each input buffer, the autocorrelation function was computed, and the second maximum was identified to determine the period of the signal, from which $f_0$ was calculated as:
+
+\begin{equation}
+f_0 = \frac{f_s}{\tau}
+\end{equation}
+
+where $f_s$ is the sampling rate (44100 Hz) and $\tau$ is the lag corresponding to the second maximum of the autocorrelation.
+
+% Placeholder for f0 plots
+\begin{figure}[h]
+    \centering
+    % \includegraphics[width=0.8\textwidth]{../files/q12_f0_plot.pdf}
+    \caption{Fundamental frequency $f_0$ estimation over time for test audio file. \textit{(Plot to be added)}}
+    \label{fig:f0_estimation}
+\end{figure}
+
+\textbf{Corresponding input files:}
+\begin{itemize}
+    \item \texttt{q12\_input\_F01\_a3\_s100\_v04.wav}
+    \item \texttt{q12\_input\_M07\_a1\_s100\_v03.wav}
+    \item \texttt{q12\_input\_Tone\_220Hz.wav}
+\end{itemize}
+
+\textbf{Analysis and comments:}
+
+The $f_0$ estimation results reveal several important characteristics:
+
+\begin{itemize}
+    \item \textbf{Tone accuracy:} For the pure tone test file (220 Hz), the estimated $f_0$ should closely match the expected value, with minor variations due to buffer size and quantization effects.
+
+    \item \textbf{Voice variability:} For speech signals (F01, M07), $f_0$ shows natural fluctuations corresponding to prosody and intonation. Voiced segments show stable $f_0$ values, while unvoiced segments or silence may produce erratic estimates.
+
+    \item \textbf{Detection errors:} Certain factors cause $f_0$ estimation errors:
+    \begin{itemize}
+        \item Octave errors (detecting $2f_0$ or $f_0/2$ instead of $f_0$)
+        \item Noise in unvoiced segments
+        \item Buffer boundary effects
+    \end{itemize}
+
+    \item \textbf{Temporal resolution:} The temporal evolution of $f_0$ depends on the buffer size used for analysis, affecting the trade-off between time resolution and frequency accuracy.
+\end{itemize}
+
+\subsection{Question 14: Buffer Size Analysis and Circular Buffer}
+
+\textbf{Provide the corresponding plots and comment. Why would a circular buffer be useful here?}
+
+% Placeholder for buffer size comparison plots
+\begin{figure}[h]
+    \centering
+    % \includegraphics[width=0.8\textwidth]{../files/q14_f0_buffersize_comparison.pdf}
+    \caption{$f_0$ estimation for different buffer sizes. \textit{(Plot to be added)}}
+    \label{fig:buffer_comparison}
+\end{figure}
+
+\textbf{Corresponding input files:}
+\begin{itemize}
+    \item \texttt{q14\_input\_bufferN128.wav}
+    \item \texttt{q14\_input\_bufferN256.wav}
+    \item \texttt{q14\_input\_bufferN512.wav}
+    \item \texttt{q14\_f0\_bufferN128.bin}
+    \item \texttt{q14\_f0\_bufferN256.bin}
+    \item \texttt{q14\_f0\_bufferN512.bin}
+\end{itemize}
+
+\textbf{Analysis of buffer size effects:}
+
+Testing different buffer sizes reveals important trade-offs:
+
+\begin{itemize}
+    \item \textbf{Small buffers (128-256 samples):}
+    \begin{itemize}
+        \item Higher temporal resolution (faster response to pitch changes)
+        \item Lower frequency resolution (less accurate $f_0$ estimation)
+        \item More susceptible to noise and octave errors
+        \item Shorter analysis window may miss complete pitch periods for low frequencies
+    \end{itemize}
+
+    \item \textbf{Large buffers (512-1024 samples):}
+    \begin{itemize}
+        \item Better frequency resolution and more accurate $f_0$ estimation
+        \item Smoother $f_0$ trajectory
+        \item Slower response to rapid pitch changes
+        \item Higher latency in real-time processing
+    \end{itemize}
+\end{itemize}
+
+\textbf{Why a circular buffer is useful:}
+
+A circular buffer would be highly beneficial for this application for several reasons:
+
+\begin{itemize}
+    \item \textbf{Decoupling analysis and I/O buffer sizes:} The circular buffer allows us to perform $f_0$ analysis on a larger window (e.g., 1024 samples) while maintaining a small I/O buffer size (e.g., 256 samples). This provides:
+    \begin{itemize}
+        \item Low latency for real-time audio I/O
+        \item High-quality $f_0$ estimation using longer analysis windows
+    \end{itemize}
+
+    \item \textbf{Continuous data stream:} Each callback adds new samples to the circular buffer while old samples are automatically overwritten. This creates a sliding window that always contains the most recent N samples.
+
+    \item \textbf{Smooth $f_0$ evolution:} By analyzing overlapping windows of data, we obtain a smoother, more continuous $f_0$ trajectory with better temporal tracking.
+
+    \item \textbf{Memory efficiency:} A circular buffer requires fixed memory allocation regardless of program duration, avoiding memory growth issues.
+
+    \item \textbf{Avoiding data copying:} Circular buffers can be implemented with minimal data movement, using only pointer arithmetic to track the read/write positions.
+\end{itemize}
+
+\section{Conclusion}
+
+This project demonstrates the implementation of a real-time autotune effect using additive synthesis. The key challenges addressed include:
+
+\begin{itemize}
+    \item Managing real-time constraints by separating non-real-time operations (file I/O, memory allocation) from the audio callback
+    \item Implementing robust $f_0$ estimation using autocorrelation
+    \item Understanding trade-offs between buffer size, latency, and estimation accuracy
+    \item Implementing circular buffers for efficient sliding window analysis
+\end{itemize}
+
+The final implementation successfully processes audio in real-time, detecting pitch and applying autotune correction to quantize frequencies to the musical scale.
+
+\end{document}
