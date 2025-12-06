@@ -50,10 +50,14 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 
-# Audio output files
+# Audio output files (but keep audio_files/ contents)
 dump_out
 dump_out.wav
 *.bin
+*.wav
+# Exception: keep test audio files
+!audio_files/*.bin
+!audio_files/*.wav
 
 # IDE
 .vscode/
