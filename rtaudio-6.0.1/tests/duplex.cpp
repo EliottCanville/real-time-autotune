@@ -270,22 +270,24 @@ int main( int argc, char *argv[] )
     adac.stopStream();
 
   // Question 9: Write dump buffers to disk in main()
-  FILE *fileInput = fopen("dump_input.bin", "wb");
-  fwrite(mydata->dumpBufferInput, sizeof(MY_TYPE), mydata->dumpIndexInput, fileInput);
-  fclose(fileInput);
+  {
+    FILE *fileInput = fopen("dump_input.bin", "wb");
+    fwrite(mydata->dumpBufferInput, sizeof(MY_TYPE), mydata->dumpIndexInput, fileInput);
+    fclose(fileInput);
 
-  FILE *fileOutput = fopen("dump_output.bin", "wb");
-  fwrite(mydata->dumpBufferOutput, sizeof(MY_TYPE), mydata->dumpIndexOutput, fileOutput);
-  fclose(fileOutput);
+    FILE *fileOutput = fopen("dump_output.bin", "wb");
+    fwrite(mydata->dumpBufferOutput, sizeof(MY_TYPE), mydata->dumpIndexOutput, fileOutput);
+    fclose(fileOutput);
 
-  // Question 12: Write f0 to disk
-  FILE *fileF0 = fopen("dump_f0.bin", "wb");
-  fwrite(mydata->dumpBufferF0, sizeof(MY_TYPE), mydata->dumpIndexF0, fileF0);
-  fclose(fileF0);
+    // Question 12: Write f0 to disk
+    FILE *fileF0 = fopen("dump_f0.bin", "wb");
+    fwrite(mydata->dumpBufferF0, sizeof(MY_TYPE), mydata->dumpIndexF0, fileF0);
+    fclose(fileF0);
 
-  std::cout << "Wrote " << mydata->dumpIndexInput << " input samples" << std::endl;
-  std::cout << "Wrote " << mydata->dumpIndexOutput << " output samples" << std::endl;
-  std::cout << "Wrote " << mydata->dumpIndexF0 << " f0 values" << std::endl;
+    std::cout << "Wrote " << mydata->dumpIndexInput << " input samples" << std::endl;
+    std::cout << "Wrote " << mydata->dumpIndexOutput << " output samples" << std::endl;
+    std::cout << "Wrote " << mydata->dumpIndexF0 << " f0 values" << std::endl;
+  }
 
  cleanup:
   if ( adac.isStreamOpen() ) adac.closeStream();
