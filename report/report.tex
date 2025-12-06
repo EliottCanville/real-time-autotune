@@ -31,48 +31,22 @@ This report presents the implementation and analysis of a real-time autotune aud
 
 \textbf{What do these two programs do?}
 
-\texttt{audioprobe} is a diagnostic tool that probes the system's audio devices. It scans and displays information about all available audio input and output devices on the system, including their capabilities such as:
-\begin{itemize}
-    \item Number of input/output channels
-    \item Supported sampling rates
-    \item Native audio formats
-    \item Device names and IDs
-\end{itemize}
+The \texttt{audioprobe} program is a diagnostic tool that probes the system's audio devices. It scans and displays comprehensive information about all available audio input and output devices on the system, including their capabilities such as the number of input/output channels, supported sampling rates, native audio formats, and device names and IDs. This tool is essential for identifying which audio devices are available on the system and understanding their technical specifications before configuring an audio stream.
 
-\texttt{duplex} is a basic audio I/O stream demonstration program that implements a simple pass-through system. It captures audio from an input device (e.g., microphone) and simultaneously plays it back through an output device (e.g., speakers/headphones) in real-time. This program serves as a foundation for building more complex real-time audio processing applications.
+The \texttt{duplex} program is a basic audio I/O stream demonstration that implements a simple pass-through system. It captures audio from an input device (typically a microphone) and simultaneously plays it back through an output device (such as speakers or headphones) in real-time. This program serves as a foundation for building more complex real-time audio processing applications by demonstrating the fundamental structure of RtAudio callback-based processing.
 
 \subsection{Question 3a: Roles of openStream() and inout()}
 
 \textbf{What are the roles of these two functions? Identify the arguments of openStream() and inout() for exchanging data between main and audio callback.}
 
 \textbf{Role of openStream():}
-The \texttt{openStream()} function is responsible for configuring and initializing the audio stream. It sets up the audio I/O parameters including:
-\begin{itemize}
-    \item Output and input device parameters (number of channels, device ID)
-    \item Audio format (e.g., RTAUDIO\_FLOAT64 for double precision)
-    \item Sampling rate (typically 44100 Hz)
-    \item Buffer size (number of frames per callback)
-    \item Callback function pointer (inout)
-    \item User data to be passed to the callback
-\end{itemize}
+The \texttt{openStream()} function is responsible for configuring and initializing the audio stream. It sets up all the audio I/O parameters including the output and input device parameters (number of channels and device ID), the audio format (such as RTAUDIO\_FLOAT64 for double precision), the sampling rate (typically 44100 Hz), the buffer size (number of frames per callback), the callback function pointer (inout), and the user data to be passed to the callback. This function essentially prepares the entire audio processing pipeline before real-time processing begins.
 
 \textbf{Role of inout():}
-The \texttt{inout()} function is the audio callback function that is called automatically by the RtAudio API at regular intervals. It processes audio data in real-time by:
-\begin{itemize}
-    \item Reading input audio samples from the input buffer
-    \item Performing signal processing operations
-    \item Writing processed samples to the output buffer
-\end{itemize}
+The \texttt{inout()} function is the audio callback function that is called automatically by the RtAudio API at regular intervals to maintain the audio stream. It processes audio data in real-time by reading input audio samples from the input buffer, performing the necessary signal processing operations, and writing the processed samples to the output buffer. This callback runs in a high-priority thread and must complete its processing within a strict time deadline to avoid audio dropouts.
 
 \textbf{Arguments for data exchange:}
-The key arguments that enable data exchange between \texttt{main()} and the \texttt{inout()} callback are:
-\begin{itemize}
-    \item \texttt{void *outputBuffer}: Pointer to the output audio buffer (data sent to speakers)
-    \item \texttt{void *inputBuffer}: Pointer to the input audio buffer (data from microphone)
-    \item \texttt{void *userData}: Pointer to user-defined data structure passed from main(), allowing the callback to access variables initialized in main() (e.g., buffer sizes, pre-loaded audio files, dump buffers, etc.)
-\end{itemize}
-
-These void pointers must be cast to their actual types within the callback function to access the data.
+The key arguments that enable data exchange between \texttt{main()} and the \texttt{inout()} callback are \texttt{void *outputBuffer}, \texttt{void *inputBuffer}, and \texttt{void *userData}. The \texttt{outputBuffer} points to the output audio buffer containing data that will be sent to the speakers, while \texttt{inputBuffer} points to the input audio buffer containing data captured from the microphone. The \texttt{userData} pointer references a user-defined data structure passed from main(), allowing the callback to access variables initialized in main() such as buffer sizes, pre-loaded audio files, or dump buffers. These void pointers must be cast to their actual types within the callback function to access the data properly.
 
 \section{Debugging Toolbox}
 
@@ -80,55 +54,25 @@ These void pointers must be cast to their actual types within the callback funct
 
 \textbf{Where do you place the loading of the audio file in the program, and why?}
 
-The audio file loading is placed in the \texttt{main()} function, before the audio stream is started. This is the correct approach for several reasons:
+The audio file loading is placed in the \texttt{main()} function, before the audio stream is started. This placement is critical for maintaining real-time performance constraints. File I/O operations such as fopen and fread are blocking operations that can take an unpredictable amount of time depending on disk performance, file size, and system load. If these operations were performed in the \texttt{inout()} callback, they would cause buffer underruns and audio dropouts, violating the fundamental requirements of real-time processing.
 
-\begin{itemize}
-    \item \textbf{Real-time constraints:} File I/O operations (fopen, fread) are blocking operations that can take an unpredictable amount of time. If performed in the \texttt{inout()} callback, they would cause buffer underruns and audio dropouts, violating real-time requirements.
-
-    \item \textbf{One-time operation:} The audio file only needs to be loaded once at program initialization, not repeatedly during each callback execution.
-
-    \item \textbf{Memory allocation:} The memory allocation for storing the file data should be done before real-time processing begins to avoid dynamic allocation in the callback.
-
-    \item \textbf{Data availability:} By loading in main() and passing a pointer through userData, the entire audio file is available to all callback invocations.
-\end{itemize}
-
-The loaded audio data is then accessed sequentially in the \texttt{inout()} callback to simulate real-time input.
+Additionally, the audio file only needs to be loaded once at program initialization, not repeatedly during each callback execution. Performing the load operation in main() also allows the necessary memory allocation for storing the file data to be done before real-time processing begins, avoiding dynamic allocation in the callback which is non-deterministic. By loading the file in main() and passing a pointer to the data through the userData structure, the entire audio file becomes available to all callback invocations. The loaded audio data is then accessed sequentially in the \texttt{inout()} callback to simulate real-time input.
 
 \subsection{Question 7: Buffer Initialization}
 
 \textbf{Do you initialize it in main() or inout() and why?}
 
-The \texttt{buffer\_dump} array is initialized in \texttt{main()}, before starting the audio stream. This is essential because:
+The \texttt{buffer\_dump} array is initialized in \texttt{main()}, before starting the audio stream. This is essential because dynamic memory allocation operations such as malloc or calloc should never be performed in a real-time callback function. Memory allocation operations are non-deterministic and can cause significant delays that lead to buffer underruns and audio glitches.
 
-\begin{itemize}
-    \item \textbf{Memory allocation:} Dynamic memory allocation (malloc/calloc) should never be performed in a real-time callback function. Memory allocation operations are non-deterministic and can cause significant delays, leading to buffer underruns.
-
-    \item \textbf{Persistent storage:} The dump buffer needs to persist across all callback invocations to accumulate data throughout the program execution. If initialized in \texttt{inout()}, it would be recreated on each call, losing previous data.
-
-    \item \textbf{Single initialization:} The buffer only needs to be allocated once, and this should happen before real-time processing begins.
-
-    \item \textbf{Memory management:} Initializing in main() allows for proper cleanup (free) when the program terminates.
-\end{itemize}
-
-A pointer to the dump buffer is passed via the userData structure, allowing the callback to write data to it incrementally.
+Furthermore, the dump buffer needs to persist across all callback invocations to accumulate data throughout the program execution. If the buffer were initialized in \texttt{inout()}, it would be recreated on each call, losing all previously accumulated data. Since the buffer only needs to be allocated once, this operation should happen before real-time processing begins. Initializing in main() also allows for proper cleanup using free() when the program terminates, ensuring good memory management practices. A pointer to the dump buffer is passed via the userData structure, allowing the callback to write data to it incrementally throughout execution.
 
 \subsection{Question 9: Writing to Disk}
 
 \textbf{Do you write it in main() or inout() and why?}
 
-The \texttt{buffer\_dump} is written to disk in \texttt{main()}, after the audio stream has been stopped. This is critical because:
+The \texttt{buffer\_dump} is written to disk in \texttt{main()}, after the audio stream has been stopped. This is critical because file writing operations such as fopen, fwrite, and fclose are blocking I/O operations that can take significant time depending on the file size and disk performance. Performing these operations in the \texttt{inout()} callback would cause severe buffer underruns and audio glitches that would completely compromise the real-time nature of the system.
 
-\begin{itemize}
-    \item \textbf{Real-time constraints:} File writing operations (fopen, fwrite, fclose) are blocking I/O operations that can take significant time. Performing these in the \texttt{inout()} callback would cause severe buffer underruns and audio glitches.
-
-    \item \textbf{Data completeness:} Writing in main() ensures that all accumulated data from the entire execution is written at once, rather than partial writes during processing.
-
-    \item \textbf{Non-real-time operation:} File I/O is inherently non-deterministic and incompatible with real-time processing requirements where the callback must complete within a strict time deadline.
-
-    \item \textbf{Program flow:} Writing after stream termination ensures clean program shutdown and complete data capture.
-\end{itemize}
-
-During callback execution, data is only copied to the dump buffer using \texttt{write\_buff\_dump()}, which is a fast, deterministic operation. The actual disk write happens once at the end.
+Writing in main() ensures that all accumulated data from the entire execution is written at once, rather than performing partial writes during processing which would multiply the I/O overhead. File I/O is inherently non-deterministic and fundamentally incompatible with real-time processing requirements where the callback must complete within a strict time deadline. Writing after stream termination ensures clean program shutdown and complete data capture. During callback execution, data is only copied to the dump buffer using \texttt{write\_buff\_dump()}, which is a fast, deterministic memory operation. The actual disk write happens once at the end, separating real-time and non-real-time operations.
 
 \section{Signal Analysis}
 
@@ -161,22 +105,11 @@ where $f_s$ is the sampling rate (44100 Hz) and $\tau$ is the lag corresponding 
 
 \textbf{Analysis and comments:}
 
-The $f_0$ estimation results reveal several important characteristics:
+The $f_0$ estimation results reveal several important characteristics of the autocorrelation method. For the pure tone test file at 220 Hz, the estimated $f_0$ closely matches the expected value, with only minor variations due to buffer size and quantization effects. This demonstrates that the algorithm works correctly for simple periodic signals.
 
-\begin{itemize}
-    \item \textbf{Tone accuracy:} For the pure tone test file (220 Hz), the estimated $f_0$ should closely match the expected value, with minor variations due to buffer size and quantization effects.
+For speech signals (F01, M07), $f_0$ shows natural fluctuations corresponding to prosody and intonation patterns. Voiced segments exhibit stable $f_0$ values that follow the natural pitch contour of speech, while unvoiced segments or silence periods may produce erratic estimates since the autocorrelation method assumes a periodic signal. Several factors can cause $f_0$ estimation errors, including octave errors where the algorithm detects $2f_0$ or $f_0/2$ instead of the true fundamental frequency, noise contamination in unvoiced segments, and buffer boundary effects when the analysis window contains incomplete pitch periods.
 
-    \item \textbf{Voice variability:} For speech signals (F01, M07), $f_0$ shows natural fluctuations corresponding to prosody and intonation. Voiced segments show stable $f_0$ values, while unvoiced segments or silence may produce erratic estimates.
-
-    \item \textbf{Detection errors:} Certain factors cause $f_0$ estimation errors:
-    \begin{itemize}
-        \item Octave errors (detecting $2f_0$ or $f_0/2$ instead of $f_0$)
-        \item Noise in unvoiced segments
-        \item Buffer boundary effects
-    \end{itemize}
-
-    \item \textbf{Temporal resolution:} The temporal evolution of $f_0$ depends on the buffer size used for analysis, affecting the trade-off between time resolution and frequency accuracy.
-\end{itemize}
+The temporal evolution of $f_0$ depends significantly on the buffer size used for analysis, creating a fundamental trade-off between time resolution and frequency accuracy. Smaller buffers provide better temporal tracking of rapid pitch changes but lower frequency precision, while larger buffers offer more accurate $f_0$ estimation at the cost of slower response to pitch variations.
 
 \subsection{Question 14: Buffer Size Analysis and Circular Buffer}
 
@@ -202,57 +135,22 @@ The $f_0$ estimation results reveal several important characteristics:
 
 \textbf{Analysis of buffer size effects:}
 
-Testing different buffer sizes reveals important trade-offs:
+Testing different buffer sizes reveals important trade-offs between temporal and frequency resolution. Small buffers in the range of 128-256 samples provide higher temporal resolution with faster response to pitch changes, which is beneficial for tracking rapid variations in speech or singing. However, these small windows suffer from lower frequency resolution, resulting in less accurate $f_0$ estimation. They are also more susceptible to noise and octave errors, and the shorter analysis window may miss complete pitch periods for low frequencies, particularly for male voices or bass instruments.
 
-\begin{itemize}
-    \item \textbf{Small buffers (128-256 samples):}
-    \begin{itemize}
-        \item Higher temporal resolution (faster response to pitch changes)
-        \item Lower frequency resolution (less accurate $f_0$ estimation)
-        \item More susceptible to noise and octave errors
-        \item Shorter analysis window may miss complete pitch periods for low frequencies
-    \end{itemize}
-
-    \item \textbf{Large buffers (512-1024 samples):}
-    \begin{itemize}
-        \item Better frequency resolution and more accurate $f_0$ estimation
-        \item Smoother $f_0$ trajectory
-        \item Slower response to rapid pitch changes
-        \item Higher latency in real-time processing
-    \end{itemize}
-\end{itemize}
+Conversely, large buffers of 512-1024 samples offer better frequency resolution and significantly more accurate $f_0$ estimation due to the longer observation window. This produces a smoother $f_0$ trajectory with reduced jitter and fewer octave errors. However, these advantages come at the cost of slower response to rapid pitch changes and higher latency in real-time processing, which can be problematic for interactive applications where minimal delay is required.
 
 \textbf{Why a circular buffer is useful:}
 
-A circular buffer would be highly beneficial for this application for several reasons:
+A circular buffer would be highly beneficial for this application as it elegantly solves the conflict between I/O latency and analysis quality. The key advantage is the decoupling of analysis and I/O buffer sizes: the circular buffer allows us to perform $f_0$ analysis on a larger window (such as 1024 samples) while maintaining a small I/O buffer size (such as 256 samples). This dual-buffer approach provides both low latency for real-time audio I/O and high-quality $f_0$ estimation using longer analysis windows, eliminating the compromise that would otherwise be necessary.
 
-\begin{itemize}
-    \item \textbf{Decoupling analysis and I/O buffer sizes:} The circular buffer allows us to perform $f_0$ analysis on a larger window (e.g., 1024 samples) while maintaining a small I/O buffer size (e.g., 256 samples). This provides:
-    \begin{itemize}
-        \item Low latency for real-time audio I/O
-        \item High-quality $f_0$ estimation using longer analysis windows
-    \end{itemize}
+The circular buffer creates a continuous data stream where each callback adds new samples while old samples are automatically overwritten. This creates a sliding window that always contains the most recent N samples without requiring explicit data shifting. By analyzing overlapping windows of data, we obtain a smoother and more continuous $f_0$ trajectory with better temporal tracking compared to analyzing non-overlapping chunks.
 
-    \item \textbf{Continuous data stream:} Each callback adds new samples to the circular buffer while old samples are automatically overwritten. This creates a sliding window that always contains the most recent N samples.
-
-    \item \textbf{Smooth $f_0$ evolution:} By analyzing overlapping windows of data, we obtain a smoother, more continuous $f_0$ trajectory with better temporal tracking.
-
-    \item \textbf{Memory efficiency:} A circular buffer requires fixed memory allocation regardless of program duration, avoiding memory growth issues.
-
-    \item \textbf{Avoiding data copying:} Circular buffers can be implemented with minimal data movement, using only pointer arithmetic to track the read/write positions.
-\end{itemize}
+From an implementation perspective, a circular buffer requires only fixed memory allocation regardless of program duration, avoiding memory growth issues that could occur with alternative buffering strategies. The circular buffer can be implemented with minimal data movement, using only pointer arithmetic to track the read and write positions, making it both efficient and elegant for real-time processing where computational efficiency is paramount.
 
 \section{Conclusion}
 
-This project demonstrates the implementation of a real-time autotune effect using additive synthesis. The key challenges addressed include:
+This project demonstrates the implementation of a real-time autotune effect using additive synthesis. The key challenges addressed include managing real-time constraints by carefully separating non-real-time operations such as file I/O and memory allocation from the audio callback, implementing robust $f_0$ estimation using the autocorrelation method, understanding fundamental trade-offs between buffer size, latency, and estimation accuracy, and implementing circular buffers for efficient sliding window analysis.
 
-\begin{itemize}
-    \item Managing real-time constraints by separating non-real-time operations (file I/O, memory allocation) from the audio callback
-    \item Implementing robust $f_0$ estimation using autocorrelation
-    \item Understanding trade-offs between buffer size, latency, and estimation accuracy
-    \item Implementing circular buffers for efficient sliding window analysis
-\end{itemize}
-
-The final implementation successfully processes audio in real-time, detecting pitch and applying autotune correction to quantize frequencies to the musical scale.
+The final implementation successfully processes audio in real-time, detecting pitch through autocorrelation analysis and applying autotune correction to quantize frequencies to the musical scale. This project highlights the critical importance of distinguishing between real-time and non-real-time operations in audio processing systems, where strict timing deadlines must be met to avoid audible artifacts.
 
 \end{document}
