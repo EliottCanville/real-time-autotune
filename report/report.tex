@@ -82,21 +82,21 @@ where $f_s$ is the sampling rate (44100 Hz) and $\tau$ is the lag corresponding 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{F01_a3_s100_v04.png}
+    \includegraphics[width=0.8\textwidth]{Q12/F01_a3_s100_v04.png}
     \caption{Input signal: female sustained vowel F01\_a3\_s100\_v04}
     \label{fig:input_signal}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{f0-without_frequency_range-512.png}
+    \includegraphics[width=0.8\textwidth]{Q12/f0-without_frequency_range-512.png}
     \caption{$f_0$ without frequency range limitation (N=512)}
     \label{fig:f0_no_limit}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{f0-512.png}
+    \includegraphics[width=0.8\textwidth]{Q14/f0-512.png}
     \caption{$f_0$ with frequency range 80-450 Hz (N=512)}
     \label{fig:f0_limited}
 \end{figure}
@@ -113,35 +113,35 @@ With 80-450 Hz limitation (Figure \ref{fig:f0_limited}), estimation improves dra
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{f0-128.png}
+    \includegraphics[width=0.7\textwidth]{Q14/f0-128.png}
     \caption{$f_0$ estimation with buffer size N=128}
     \label{fig:f0_128}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{f0-256.png}
+    \includegraphics[width=0.7\textwidth]{Q14/f0-256.png}
     \caption{$f_0$ estimation with buffer size N=256}
     \label{fig:f0_256}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{f0-512.png}
+    \includegraphics[width=0.7\textwidth]{Q14/f0-512.png}
     \caption{$f_0$ estimation with buffer size N=512}
     \label{fig:f0_512}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{f0-1024.png}
+    \includegraphics[width=0.7\textwidth]{Q14/f0-1024.png}
     \caption{$f_0$ estimation with buffer size N=1024}
     \label{fig:f0_1024}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\textwidth]{f0-2048.png}
+    \includegraphics[width=0.7\textwidth]{Q14/f0-2048.png}
     \caption{$f_0$ estimation with buffer size N=2048}
     \label{fig:f0_2048}
 \end{figure}
@@ -192,28 +192,42 @@ Additive synthesis reconstructs the signal by summing cosines at harmonic freque
 y[n] = \sum_{h} A_h \cos\left(2\pi f_h \frac{n}{f_s}\right)
 \end{equation}
 
-When each frame is synthesized independently (resetting $n=0$ at each callback), the phase is discontinuous at frame boundaries. If the signal value at the end of frame $k$ differs from the value at the start of frame $k+1$, an abrupt jump occurs, producing audible clicks. These discontinuities introduce high-frequency artifacts.
+where $n$ is reset to 0 at each new frame (buffer).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Q17/output_512_without_phase.png}
+    \caption{Output signal synthesized without phase continuity (N=512)}
+    \label{fig:output_without_phase}
+\end{figure}
+
+Figure \ref{fig:output_without_phase} clearly reveals the problem: visible discontinuities appear at regular intervals corresponding to buffer boundaries. When we zoom in on these transitions, we observe abrupt jumps in amplitude. Since each frame starts with $n=0$, the cosine functions restart from their initial values regardless of where the previous frame ended. If the last sample of frame $k$ is at amplitude 0.3 and the first sample of frame $k+1$ happens to be at -0.5, a sudden jump of 0.8 occurs within a single sample period.
+
+These discontinuities are perceived as sharp clicks in the audio. From a spectral perspective, these impulse-like transitions introduce high-frequency components across the entire spectrum, creating an unpleasant crackling sound that completely masks the original voice quality. The effect becomes particularly noticeable during sustained vowels where $f_0$ remains relatively stable—the regular spacing of clicks (every $\sim$46 ms for a 512-sample buffer at 44100 Hz) creates an audible periodic disturbance.
 
 \subsection{Question 18: Adding Phase for Continuity}
 
 \textbf{Include phase in synthesis. Are transitions between frames perfect?}
 
-Phase continuity is achieved by maintaining a global sample counter and using the FFT phase:
+To eliminate discontinuities, we maintain phase coherence across frames using a global sample counter:
 \begin{equation}
 y[n] = \sum_{h} A_h \cos\left(2\pi f_h \frac{n_{global}}{f_s} + \phi_h\right)
 \end{equation}
 
-where $n_{global}$ is the total sample count since program start, and $\phi_h$ is the phase from the FFT. This ensures the synthesized waveform continues smoothly from one frame to the next.
+where $n_{global}$ increments continuously throughout execution and $\phi_h$ is the initial phase extracted from the FFT.
 
-Transitions are improved but not perfect. Imperfections arise from:
-\begin{itemize}
-\item $f_0$ variations between frames causing frequency jumps
-\item Amplitude changes between consecutive frames
-\item FFT phase estimation errors
-\item Frame-to-frame harmonic content variations
-\end{itemize}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Q18/output_512_with_phase.png}
+    \caption{Output signal synthesized with phase continuity (N=512)}
+    \label{fig:output_with_phase}
+\end{figure}
 
-For sustained vowels with stable $f_0$, transitions are nearly seamless. During transients or pitch changes, some artifacts may remain.
+The improvement is striking. Figure \ref{fig:output_with_phase} shows a smooth, continuous waveform with no visible jumps at buffer boundaries. The synthesized signal now exhibits natural variations in amplitude and frequency that follow the vocal characteristics of the input. Comparing with Figure \ref{fig:output_without_phase}, the difference is night and day—the regular periodic glitches have disappeared.
+
+However, the transitions are not perfectly seamless. Close inspection reveals occasional minor irregularities, particularly during moments when $f_0$ changes rapidly. This occurs because our frame-by-frame analysis assumes quasi-stationarity: we estimate $f_0$ and harmonics once per buffer and synthesize as if these values were constant throughout. When the voice pitch actually varies within a frame, small mismatches accumulate. Additionally, the FFT's finite frequency resolution ($\sim$21.5 Hz for N=2048) means we cannot capture pitch variations finer than this limit.
+
+Despite these imperfections, the result is audibly clean. For sustained vowels with stable $f_0$, the synthesis is practically indistinguishable from the original in terms of smoothness. The phase continuity successfully transforms a severely artifact-ridden output into a usable reconstruction, validating the importance of tracking phase across frames in real-time audio synthesis.
 
 \section{Conclusion}
 
